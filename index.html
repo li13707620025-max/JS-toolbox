@@ -668,7 +668,11 @@
       };
       img.src = item.src;
     }
-    function removeImage(id){ state.images = state.images.filter(i => i.id !== id); renderAll(); }
+    function removeImage(id){
+      const item=state.images.find(i=>i.id===id);
+      if (!item || !confirm(`确定删除“${item.name}”吗？此操作无法恢复。`)) return;
+      state.images = state.images.filter(i => i.id !== id); renderAll();
+    }
 
     function computeGrid(){
       const rows=state.rows, cols=state.cols;
@@ -922,7 +926,18 @@
       }
       render();
     }
-    function removeAll(){ state.items=[]; render(); }
+    function removeAll(){
+      if (!state.items.length || !confirm(`确定清空全部 ${state.items.length} 张图片吗？此操作无法恢复。`)) return;
+      state.items.forEach(item=>{ if(item.resultUrl) URL.revokeObjectURL(item.resultUrl); });
+      state.items=[]; render();
+    }
+    function removeItem(id){
+      const item=state.items.find(i=>i.id===id);
+      if (!item || !confirm(`确定删除“${item.name}”吗？此操作无法恢复。`)) return;
+      if (item?.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      state.items=state.items.filter(i=>i.id!==id);
+      render();
+    }
 
     modeSeg.addEventListener('click', e=>{
       const btn = e.target.closest('button'); if (!btn) return;
@@ -1003,10 +1018,11 @@
           <td class="size-after">${item.resultBlob ? fmtSize(item.resultBlob.size) : '—'}</td>
           <td>${item.resultBlob ? saveBadge(item.originalSize, item.resultBlob.size) : ''}</td>
           <td class="status-pill">${item.status}</td>
-          <td>${item.resultUrl ? '<button class="row-dl">下载</button>' : ''}</td>`;
+          <td>${item.resultUrl ? '<button class="row-dl">下载</button>' : ''}<button class="row-remove" type="button">删除</button></td>`;
         if (item.resultUrl){
           tr.querySelector('.row-dl').addEventListener('click', ()=>downloadOne(item));
         }
+        tr.querySelector('.row-remove').addEventListener('click', ()=>removeItem(item.id));
         tbody.appendChild(tr);
       });
       updateSummary();
@@ -1142,8 +1158,9 @@
       state.items.forEach(item=>{
         const li=document.createElement('li');
         li.className = item.id===state.activeId ? 'active' : '';
-        li.innerHTML = `<img src="${item.src}"><span>${item.name}</span>${item.resultBlob?'<span class="done-dot"></span>':''}`;
+        li.innerHTML = `<img src="${item.src}"><span>${item.name}</span>${item.resultBlob?'<span class="done-dot"></span>':''}<button class="item-remove" type="button" title="删除这张图片" aria-label="删除 ${item.name}">×</button>`;
         li.addEventListener('click', ()=>{ state.activeId=item.id; renderList(); updatePreview(); });
+        li.querySelector('.item-remove').addEventListener('click', event=>{ event.stopPropagation(); removeItem(item.id); });
         list.appendChild(li);
       });
       const has = state.items.length>0;
@@ -1154,6 +1171,15 @@
       btnZip.disabled = !state.items.some(i=>i.resultBlob);
     }
     function activeItem(){ return state.items.find(i=>i.id===state.activeId); }
+    function removeItem(id){
+      const index=state.items.findIndex(i=>i.id===id); if(index<0) return;
+      const item=state.items[index];
+      if (!confirm(`确定删除“${item.name}”吗？此操作无法恢复。`)) return;
+      state.items.splice(index,1);
+      if(item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      if(state.activeId===id) state.activeId=state.items[index]?.id ?? state.items[index-1]?.id ?? null;
+      renderList(); updatePreview();
+    }
 
     function applyFilterCanvas(img, params){
       const canvas = document.createElement('canvas');
@@ -1295,6 +1321,13 @@
       }
       render();
     }
+    function removeItem(id){
+      const item=state.items.find(i=>i.id===id);
+      if(!item || !confirm(`确定删除“${item.name}”吗？此操作无法恢复。`)) return;
+      if(item?.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      state.items=state.items.filter(i=>i.id!==id);
+      render();
+    }
 
     formatSeg.addEventListener('click', e=>{
       const btn=e.target.closest('button'); if(!btn) return;
@@ -1320,7 +1353,11 @@
     ['dragenter','dragover'].forEach(evt=>uploadZone.addEventListener(evt, e=>{ e.preventDefault(); uploadZone.classList.add('drag'); }));
     ['dragleave','drop'].forEach(evt=>uploadZone.addEventListener(evt, e=>{ e.preventDefault(); uploadZone.classList.remove('drag'); }));
     uploadZone.addEventListener('drop', e=>addFiles(e.dataTransfer.files));
-    btnClearAll.addEventListener('click', ()=>{ state.items=[]; render(); });
+    btnClearAll.addEventListener('click', ()=>{
+      if (!state.items.length || !confirm(`确定清空全部 ${state.items.length} 张图片吗？此操作无法恢复。`)) return;
+      state.items.forEach(item=>{ if(item.resultUrl) URL.revokeObjectURL(item.resultUrl); });
+      state.items=[]; render();
+    });
 
     function computeTargetSize(item){
       let w=item.originalW, h=item.originalH;
@@ -1364,8 +1401,9 @@
           <td class="size-after">${item.resultBlob ? item.outW+' × '+item.outH : '—'}</td>
           <td>${item.resultBlob ? fmtSize(item.resultBlob.size) : '—'}</td>
           <td class="status-pill">${item.status}</td>
-          <td>${item.resultUrl ? '<button class="row-dl">下载</button>' : ''}</td>`;
+          <td>${item.resultUrl ? '<button class="row-dl">下载</button>' : ''}<button class="row-remove" type="button">删除</button></td>`;
         if (item.resultUrl){ tr.querySelector('.row-dl').addEventListener('click', ()=>downloadOne(item)); }
+        tr.querySelector('.row-remove').addEventListener('click', ()=>removeItem(item.id));
         tbody.appendChild(tr);
       });
       btnZip.disabled = !state.items.some(i=>i.resultBlob);
@@ -1463,8 +1501,9 @@
       state.items.forEach(item=>{
         const li=document.createElement('li');
         li.className = item.id===state.activeId ? 'active' : '';
-        li.innerHTML = `<img src="${item.workingSrc}"><span>${item.name}</span>${item.resultBlob?'<span class="done-dot"></span>':''}`;
+        li.innerHTML = `<img src="${item.workingSrc}"><span>${item.name}</span>${item.resultBlob?'<span class="done-dot"></span>':''}<button class="item-remove" type="button" title="删除这张图片" aria-label="删除 ${item.name}">×</button>`;
         li.addEventListener('click', ()=>{ state.activeId=item.id; resetBox(); renderList(); renderStage(); });
+        li.querySelector('.item-remove').addEventListener('click', event=>{ event.stopPropagation(); removeItem(item.id); });
         list.appendChild(li);
       });
       const has = state.items.length>0;
@@ -1474,6 +1513,15 @@
       btnRemoveWatermark.disabled = !has;
       btnDownload.disabled = !has;
       btnZip.disabled = !has;
+    }
+    function removeItem(id){
+      const index=state.items.findIndex(i=>i.id===id); if(index<0) return;
+      const item=state.items[index];
+      if (!confirm(`确定删除“${item.name}”吗？此操作无法恢复。`)) return;
+      state.items.splice(index,1);
+      if(item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      if(state.activeId===id) state.activeId=state.items[index]?.id ?? state.items[index-1]?.id ?? null;
+      resetBox(); renderList(); renderStage();
     }
 
     function resetBox(){ state.box = { x:0, y:0, w:100, h:100 }; }
